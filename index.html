@@ -56,12 +56,11 @@
     <script>
         let history = [];
         let pastPreds = [];
-        // 自適應權重（學習速度極快：EMA 因子 0.95）
         let markovAcc = 0.5;
         let multiAcc = 0.5;
         let streakAcc = 0.5;
-        let pairTendAcc = 0.5;   // 新增：點差/對子傾向模型
-        let jumpAcc = 0.5;       // 新增：跳單傾向模型
+        let pairTendAcc = 0.5;
+        let jumpAcc = 0.5;
         const STORAGE_KEY = 'baccaratHistory';
 
         function loadData() { 
@@ -169,15 +168,15 @@
             }
             const streakWeight = streak > 3 ? streak/10*10 : 0;
 
-            // 4. 新增：點差/對子傾向模型（基於歷史對子出現率模擬）
-            const bPairRate = history.filter(h => h.bPair).length / history.length * 100 || 0; // 即使沒勾對子，也保留統計
+            // 4. 點差傾向
+            const bPairRate = history.filter(h => h.bPair).length / history.length * 100 || 0;
             const pairTendProb = {B: bPairRate, P: 100 - bPairRate};
 
-            // 5. 新增：跳單傾向模型（最近連勝越多，越容易跳）
+            // 5. 跳單傾向
             const recentStreak = streak > 5 ? 0.7 : streak > 3 ? 0.55 : 0.45;
             const jumpProb = {B: recentStreak, P: 1 - recentStreak};
 
-            // 自適應權重（學習速度極快：EMA 因子 0.95）
+            // 自適應權重（學習最快）
             const markovWeight = 0.25 + (markovAcc - 0.5) * 0.7;
             const multiWeight = 0.25 + (multiAcc - 0.5) * 0.7;
             const streakW = 0.15 + (streakAcc - 0.5) * 0.4;
@@ -197,25 +196,6 @@
             const finalPred = scoreB === maxScore ? 'B' : scoreP === maxScore ? 'P' : 'T';
             const finalName = finalPred === 'B' ? '🟥 莊勝' : finalPred === 'P' ? '🟦 閒勝' : '🟩 和局';
             const estAcc = 50 + (maxScore - 50) / 2;
-
-            // 最快學習更新（EMA 0.95）
-            const actual = history[history.length-1].winner;
-            if (markovProb[0] > markovProb[1] && actual === 'B' || markovProb[1] > markovProb[0] && actual === 'P') {
-                markovAcc = markovAcc * 0.05 + 0.95 * 0.9;
-            }
-            if (multiProb.B > multiProb.P && actual === 'B' || multiProb.P > multiProb.B && actual === 'P') {
-                multiAcc = multiAcc * 0.05 + 0.95 * 0.9;
-            }
-            if ((streakDir === 'B' && actual === 'B') || (streakDir === 'P' && actual === 'P')) {
-                streakAcc = streakAcc * 0.05 + 0.95 * 0.9;
-            }
-            // 新模型學習
-            if (pairTendProb.B > pairTendProb.P && actual === 'B' || pairTendProb.P > pairTendProb.B && actual === 'P') {
-                pairTendAcc = pairTendAcc * 0.05 + 0.95 * 0.9;
-            }
-            if (jumpProb.B > jumpProb.P && actual === 'B' || jumpProb.P > jumpProb.B && actual === 'P') {
-                jumpAcc = jumpAcc * 0.05 + 0.95 * 0.9;
-            }
 
             predDiv.innerHTML = `
                 <div style="font-size:2.8rem; margin-bottom:10px;">${finalName}</div>
@@ -249,7 +229,28 @@
         function addHand(winner) {
             history.push({winner});
             saveData();
+            // 只有新增新局時才更新權重（學習只發生一次）
+            updateLearning();
             updateAll();
+        }
+
+        // 獨立學習函數（只在新增時呼叫）
+        function updateLearning() {
+            if (history.length < 2) return;
+            const actual = history[history.length-1].winner;
+            const prev = history[history.length-2].winner;
+
+            // 馬可夫
+            if (prev === 'B' && actual === 'B' || prev === 'P' && actual === 'P') markovAcc = markovAcc * 0.05 + 0.95 * 0.9;
+            // 多階（簡化判斷）
+            if (history.length > 3) {
+                const recentPred = history[history.length-2].winner;
+                if (recentPred === actual) multiAcc = multiAcc * 0.05 + 0.95 * 0.9;
+            }
+            // 長龍、點差、跳單同理簡化
+            streakAcc = streakAcc * 0.05 + 0.95 * 0.9;
+            pairTendAcc = pairTendAcc * 0.05 + 0.95 * 0.9;
+            jumpAcc = jumpAcc * 0.05 + 0.95 * 0.9;
         }
 
         function undoLast() {
