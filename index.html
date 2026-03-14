@@ -176,7 +176,7 @@
             const recentStreak = streak > 5 ? 0.7 : streak > 3 ? 0.55 : 0.45;
             const jumpProb = {B: recentStreak, P: 1 - recentStreak};
 
-            // 自適應權重（學習最快）
+            // 自適應權重
             const markovWeight = 0.25 + (markovAcc - 0.5) * 0.7;
             const multiWeight = 0.25 + (multiAcc - 0.5) * 0.7;
             const streakW = 0.15 + (streakAcc - 0.5) * 0.4;
@@ -197,6 +197,20 @@
             const finalName = finalPred === 'B' ? '🟥 莊勝' : finalPred === 'P' ? '🟦 閒勝' : '🟩 和局';
             const estAcc = 50 + (maxScore - 50) / 2;
 
+            // 風險評級
+            const risk = maxScore < 58 ? '高風險 - 建議停手' : 
+                        maxScore < 65 ? '中風險 - 小額試試' : '低風險 - 可跟';
+
+            // 歷史準率追蹤
+            const currentPast = pastPreds;
+            if (currentPast.length > 0) {
+                const lastPred = currentPast[currentPast.length-1];
+                const actual = history[history.length-1].winner;
+            }
+            currentPast.push(finalPred);
+            const histAcc = currentPast.length > 1 ? 
+                (currentPast.slice(0,-1).filter((p, i) => p === history[i+1].winner).length / (currentPast.length-1) * 100) : 50;
+
             predDiv.innerHTML = `
                 <div style="font-size:2.8rem; margin-bottom:10px;">${finalName}</div>
                 <div style="font-size:1.8rem; color:#facc15;">自適應準率 ~${estAcc.toFixed(1)}%</div>
@@ -207,7 +221,12 @@
                     多階序列：莊 ${multiProb.B.toFixed(1)}% | 閒 ${multiProb.P.toFixed(1)}%<br>
                     長龍：目前連勝 ${streak} 局
                 </div>
-                <div style="margin-top:10px; font-size:0.9rem; color:#9ca3af;">已學習 ${history.length} 筆 • 5種模型即時學習</div>
+                <div style="margin-top:15px; font-size:1rem; color:#22c55e;">
+                    風險評級：${risk}
+                </div>
+                <div style="margin-top:10px; font-size:0.9rem; color:#9ca3af;">
+                    歷史預測準率 ${histAcc.toFixed(1)}% • 長期~50% • 已學習 ${history.length} 筆
+                </div>
             `;
         }
 
@@ -229,28 +248,7 @@
         function addHand(winner) {
             history.push({winner});
             saveData();
-            // 只有新增新局時才更新權重（學習只發生一次）
-            updateLearning();
             updateAll();
-        }
-
-        // 獨立學習函數（只在新增時呼叫）
-        function updateLearning() {
-            if (history.length < 2) return;
-            const actual = history[history.length-1].winner;
-            const prev = history[history.length-2].winner;
-
-            // 馬可夫
-            if (prev === 'B' && actual === 'B' || prev === 'P' && actual === 'P') markovAcc = markovAcc * 0.05 + 0.95 * 0.9;
-            // 多階（簡化判斷）
-            if (history.length > 3) {
-                const recentPred = history[history.length-2].winner;
-                if (recentPred === actual) multiAcc = multiAcc * 0.05 + 0.95 * 0.9;
-            }
-            // 長龍、點差、跳單同理簡化
-            streakAcc = streakAcc * 0.05 + 0.95 * 0.9;
-            pairTendAcc = pairTendAcc * 0.05 + 0.95 * 0.9;
-            jumpAcc = jumpAcc * 0.05 + 0.95 * 0.9;
         }
 
         function undoLast() {
