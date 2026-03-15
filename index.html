@@ -103,6 +103,7 @@
                 }
             });
             if (currentCol.length > 0) columns.push(currentCol);
+
             const startCol = Math.max(0, columns.length - visibleCols);
             columns.slice(startCol).forEach((col, colIdx) => {
                 col.forEach((bead, rowIdx) => {
@@ -131,7 +132,6 @@
                 return;
             }
 
-            // 1. 馬可夫鏈
             const states = ['B', 'P', 'T'];
             const transMatrix = states.map(() => states.map(() => 0));
             for (let i = 1; i < history.length; i++) {
@@ -143,7 +143,6 @@
             const total = transMatrix[lastIdx].reduce((a,b)=>a+b,0) || 1;
             const markovProb = transMatrix[lastIdx].map(c => c/total*100);
 
-            // 2. 多階序列
             let multiPred = {B:0, P:0, T:0};
             for (let len = 3; len <= 20; len++) {
                 if (history.length < len+1) continue;
@@ -159,7 +158,6 @@
             const multiTotal = Object.values(multiPred).reduce((a,b)=>a+b,0) || 1;
             const multiProb = Object.keys(multiPred).reduce((o,k)=>{o[k]=multiPred[k]/multiTotal*100; return o;},{});
 
-            // 3. 長龍
             let streak = 1;
             let streakDir = history[history.length-1].winner;
             for (let i = history.length-2; i>=0; i--) {
@@ -168,22 +166,18 @@
             }
             const streakWeight = streak > 3 ? streak/10*10 : 0;
 
-            // 4. 點差傾向
             const bPairRate = history.filter(h => h.bPair).length / history.length * 100 || 0;
             const pairTendProb = {B: bPairRate, P: 100 - bPairRate};
 
-            // 5. 跳單傾向
             const recentStreak = streak > 5 ? 0.7 : streak > 3 ? 0.55 : 0.45;
             const jumpProb = {B: recentStreak, P: 1 - recentStreak};
 
-            // 自適應權重
             const markovWeight = 0.25 + (markovAcc - 0.5) * 0.7;
             const multiWeight = 0.25 + (multiAcc - 0.5) * 0.7;
             const streakW = 0.15 + (streakAcc - 0.5) * 0.4;
             const pairWeight = 0.15 + (pairTendAcc - 0.5) * 0.3;
             const jumpWeight = 0.1 + (jumpAcc - 0.5) * 0.3;
 
-            // 綜合分數
             let scoreB = markovProb[0] * markovWeight + multiProb.B * multiWeight + 
                         (streakDir === 'B' ? streakWeight : 0) + 
                         pairTendProb.B * pairWeight + jumpProb.B * jumpWeight + 20;
@@ -197,26 +191,16 @@
             const finalName = finalPred === 'B' ? '🟥 莊勝' : finalPred === 'P' ? '🟦 閒勝' : '🟩 和局';
             const estAcc = 50 + (maxScore - 50) / 2;
 
-            // 風險評級
             const risk = maxScore < 58 ? '高風險 - 建議停手' : 
                         maxScore < 65 ? '中風險 - 小額試試' : '低風險 - 可跟';
 
-            // 歷史準率追蹤
-            const currentPast = pastPreds;
-            if (currentPast.length > 0) {
-                const lastPred = currentPast[currentPast.length-1];
-                const actual = history[history.length-1].winner;
-            }
-            currentPast.push(finalPred);
-            const histAcc = currentPast.length > 1 ? 
-                (currentPast.slice(0,-1).filter((p, i) => p === history[i+1].winner).length / (currentPast.length-1) * 100) : 50;
+            const histAcc = pastPreds.length > 1 ? 
+                (pastPreds.slice(0,-1).filter((p, i) => p === history[i+1].winner).length / (pastPreds.length-1) * 100) : 50;
 
             predDiv.innerHTML = `
                 <div style="font-size:2.8rem; margin-bottom:10px;">${finalName}</div>
                 <div style="font-size:1.8rem; color:#facc15;">自適應準率 ~${estAcc.toFixed(1)}%</div>
                 <div style="margin-top:20px; font-size:1rem;">
-                    馬可夫權重：${markovWeight.toFixed(2)}　多階權重：${multiWeight.toFixed(2)}<br>
-                    長龍權重：${streakW.toFixed(2)}　點差權重：${pairWeight.toFixed(2)}　跳單權重：${jumpWeight.toFixed(2)}<br>
                     馬可夫：莊 ${markovProb[0].toFixed(1)}% | 閒 ${markovProb[1].toFixed(1)}%<br>
                     多階序列：莊 ${multiProb.B.toFixed(1)}% | 閒 ${multiProb.P.toFixed(1)}%<br>
                     長龍：目前連勝 ${streak} 局
