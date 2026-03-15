@@ -87,24 +87,30 @@
             const ctx = canvas.getContext('2d');
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             const cell = 48;
-            const visibleCols = Math.floor(canvas.width / cell);
-            let columns = [];
+            const visibleCols = Math.floor(canvas.width / cell);  // 約15欄
+
+            let columns = [];           // 每欄是一個陣列（最多6顆）
             let currentCol = [];
+
             history.forEach(h => {
                 if (h.winner === 'T') {
-                    if (currentCol.length > 0) currentCol[currentCol.length-1].tie = (currentCol[currentCol.length-1].tie || 0) + 1;
+                    if (currentCol.length > 0) {
+                        currentCol[currentCol.length - 1].tie = (currentCol[currentCol.length - 1].tie || 0) + 1;
+                    }
                     return;
                 }
-                if (currentCol.length > 0 && currentCol[currentCol.length-1].winner === h.winner && currentCol.length < 6) {
+                if (currentCol.length > 0 && currentCol[currentCol.length - 1].winner === h.winner && currentCol.length < 6) {
                     currentCol.push({winner: h.winner, tie: 0});
                 } else {
-                    columns.push(currentCol);
+                    if (currentCol.length > 0) columns.push(currentCol);
                     currentCol = [{winner: h.winner, tie: 0}];
                 }
             });
             if (currentCol.length > 0) columns.push(currentCol);
 
+            // 只顯示最後 visibleCols 欄
             const startCol = Math.max(0, columns.length - visibleCols);
+
             columns.slice(startCol).forEach((col, colIdx) => {
                 col.forEach((bead, rowIdx) => {
                     const x = colIdx * cell + 6;
@@ -132,6 +138,7 @@
                 return;
             }
 
+            // 馬可夫鏈、多階序列、長龍、點差、跳單（同前）
             const states = ['B', 'P', 'T'];
             const transMatrix = states.map(() => states.map(() => 0));
             for (let i = 1; i < history.length; i++) {
